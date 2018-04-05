@@ -5,6 +5,8 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.graphics.Rect;
+import android.graphics.pdf.PdfDocument;
 import android.hardware.usb.UsbConstants;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
@@ -16,21 +18,30 @@ import android.os.Message;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
+import java.nio.charset.Charset;
 
 public class MainActivity extends AppCompatActivity {
+
+
+
     private static final String ACTION_USB_PERMISSION =
             "me.onionpie.otgexplorer.USB_PERMISSION";
-    private static final String LOGTAG = "otg explorer";
+    private static final String LOGTAG = "otg_explorer";
     private UsbManager usbManager;
     private String mInfo = "设备列表:";
     //读取usbdevice时使用
     private UsbDeviceConnection usbDeviceConnection;
     private UsbInterface usbInterface;
     TextView mInfoTextView;
+
     private final BroadcastReceiver mUsbReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -73,11 +84,25 @@ public class MainActivity extends AppCompatActivity {
 
         IntentFilter intentFilter = new IntentFilter(ACTION_USB_PERMISSION);
         registerReceiver(mUsbReceiver, intentFilter);
+
         for (UsbDevice usbDevice : usbManager.getDeviceList().values()) {
+
+            Log.i(LOGTAG, "USB device name " + usbDevice.getDeviceName());
+            Log.i(LOGTAG, "USB product name " + usbDevice.getProductName());
+
             collectDeviceInfo(usbDevice);
             if (hasPermission(usbDevice)) {
+
+
+                Log.i(LOGTAG,   usbDevice.getDeviceName() +" got permission");
+
+
+                printData(usbDevice);
+
+
                 //读取usbDevice里的内容
             } else {
+                Log.i(LOGTAG,   usbDevice.getDeviceName() +" no permission");
                 requestPermission(usbDevice);
             }
         }
@@ -93,6 +118,59 @@ public class MainActivity extends AppCompatActivity {
                 "DeviceSubClass: " + usbDevice.getDeviceSubclass() + "\n" +
                 "VendorID: " + usbDevice.getVendorId() + "\n" +
                 "ProductID: " + usbDevice.getProductId() + "\n";
+    }
+
+    private void printData(UsbDevice mDevice){
+
+        String test = "THIS IS A PRINT TEST";
+        final byte [] testBytes = test.getBytes(Charset.forName("UTF-8"));
+        
+        final UsbEndpoint mEndpointBulkOut;
+
+        UsbInterface intf = mDevice.getInterface(0);
+
+        Log.i(LOGTAG, "USB interface name " + intf.getName());
+
+        Log.i(LOGTAG, "USB interface count " + intf.getEndpointCount());
+
+        UsbEndpoint ep = intf.getEndpoint(0);
+
+        Log.i(LOGTAG, "USB endpoint " + ep.toString() );
+
+        if (ep.getType() == UsbConstants.USB_ENDPOINT_XFER_BULK) {
+            if (ep.getDirection() == UsbConstants.USB_DIR_OUT) {
+                mEndpointBulkOut = ep;
+                usbDeviceConnection = usbManager.openDevice(mDevice);
+                if(usbDeviceConnection!=null)
+                {
+                    Log.i(LOGTAG, "Connection connected");
+                    Toast.makeText(this, "Device connected", Toast.LENGTH_SHORT).show();
+                } else {
+                    Log.i(LOGTAG, "Connection not connected");
+                }
+                boolean forceClaim = true;
+                usbDeviceConnection.claimInterface(intf, forceClaim );
+                //    Integer res = usbDeviceConnection.bulkTransfer(mEndpointBulkOut, testBytes, testBytes.length, 10000);
+                new Thread(new Runnable()
+                {
+                    @Override
+                    public void run()
+                    {
+                        int b = usbDeviceConnection.bulkTransfer(mEndpointBulkOut, testBytes, testBytes.length, 100000);
+                        Log.i(LOGTAG, " Return Status b-->" + b);
+                    }
+                }).start();
+
+                usbDeviceConnection.releaseInterface(intf);
+            }
+        }
+
+
+
+
+
+
+
     }
 
     private String translateDeviceClass(int deviceClass) {

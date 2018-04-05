@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">OTGExplorer</string>
+    <string name="title_activity_print">PrintActivity</string>
 </resources>
